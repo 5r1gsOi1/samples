@@ -14,192 +14,14 @@
 #include <thread>
 
 #include "defs.h"
+#include "shared_memory.h"
+#include "shared_picture.h"
 
 #pragma comment(lib, "gdiplus.lib")
 
 #define WM_SHARED_POSITION_CHANGED (WM_APP + 0x0001)
 
 constexpr bool kDrawFromBitmap{ true };
-
-template <size_t total_number_of_lines, size_t number_of_points_in_line>
-class MultiThreadPicture {
-public:
-  typedef std::size_t ThreadIndex;
-  struct Line {
-    Line() = default;
-    std::size_t start{}, length{};
-    Gdiplus::Color color;
-    ThreadIndex creator{};
-  };
-  struct Picture {
-    std::array<Gdiplus::Point, number_of_points_in_line> points{};
-    std::array<Line, total_number_of_lines> lines{};
-    std::size_t current_point{}, start_line{}, end_line{};
-  };
-
-  struct DrawerThread {
-    bool screen_needs_to_be_cleared{ false };
-  };
-
-  Gdiplus::Bitmap * LockBitmapAndGetIt() {
-    bitmap_mutex_.lock();
-    return bitmap_;
-  }
-
-  void ReleaseBitmap() {
-    bitmap_mutex_.unlock();
-  }
-
-  MultiThreadPicture() {
-    if constexpr (kDrawFromBitmap) {
-      bitmap_ = new Gdiplus::Bitmap(kDefaultWindowSize.x, kDefaultWindowSize.y, PixelFormat32bppRGB);
-      Gdiplus::Graphics graphics(bitmap_);
-      graphics.Clear(Gdiplus::Color(255, 255, 255, 255));
-    }
-  }
-
-  void CreateBitmap(const POINT* size) {
-    bitmap_mutex_.lock();
-    delete bitmap_;
-    bitmap_ = new Gdiplus::Bitmap(size.x, size.y, PixelFormat32bppRGB);
-    bitmap_mutex_.unlock();
-  }
-
-  Picture GetPicture() {
-    LockAccess();
-    Picture picture_copy{ picture };
-    ClearAccess();
-    return picture_copy;
-  }
-
-  void ClearPicture(const ThreadIndex thread_index) {
-    LockAccess();
-    for (auto& line : picture.lines) {
-      line.length = 0;
-    }
-    ClearAccess();
-  }
-
-  ThreadIndex AddThread(const Gdiplus::Color& color) {
-    LockAccess();
-    drawer_threads.push_back(DrawerThread{});
-    ClearAccess();
-    return drawer_threads.size() - 1;
-  }
-
-  void RemoveLineThatStartsAt(const std::size_t start_index) {
-    std::cout << "SEARCHING : " << start_index << std::endl;
-    auto real_index{start_index};
-    if (start_index >= picture.points.size()) {
-      real_index = 0;
-    }
-    for (auto & line : picture.lines) {
-      std::cout << "   comparing to " << line.start << "[" << line.length  << "]" << std::endl;
-      if (line.length != 0 and line.start == real_index) {
-        std::cout << "FOUND : " << line.start << std::endl;
-        line.start = 0;
-        line.length = 0;
-        break;
-      }
-    }
-  }
-
-  void DecrementLineFromLeftSide(const std::size_t line_index) {
-    auto & line = picture.lines.at(line_index);
-    if (line.length > 0) {
-      --line.length;
-      ++line.start;
-      if (line.start >= picture.points.size()) {
-        line.start = 0;
-      }
-    }
-  }
-
-  void AddPoint(const ThreadIndex thread_index, const Gdiplus::Point& point) {
-    LockAccess();
-    auto& points = picture.points;
-    auto& current_point = picture.current_point;
-    auto& current_line = picture.lines.at(picture.end_line);
-
-    //std::cout << "next line = " << picture.start_line << std::endl;
-    std::cout << "current point = " << current_point << std::endl;
-
-    if (current_point == picture.lines.at(picture.start_line).start) {
-      std::cout << "  MATCH!, " << picture.start_line << std::endl;
-      DecrementLineFromLeftSide(picture.start_line);
-      if (picture.lines.at(picture.start_line).length == 0 and 
-          picture.start_line != picture.end_line) {
-        ++picture.start_line;
-        if (picture.start_line >= picture.lines.size()) {
-          picture.start_line = 0;
-        }
-      }
-    }
-
-    points.at(current_point) = point;
-    if (current_line.length < points.size()) {
-      ++current_line.length;
-    }
-
-    ++current_point;
-    if (current_point >= points.size()) {
-      current_point = 0;
-    }
-    ClearAccess();
-  }
-
-  void AddLine(const ThreadIndex thread_index, const Gdiplus::Color& color) {
-    LockAccess();
-
-    ++picture.end_line;
-    if (picture.end_line >= picture.lines.size()) {
-      picture.end_line = 0;
-    }
-    if (picture.end_line == picture.start_line) {
-      ++picture.start_line;
-      if (picture.start_line >= picture.lines.size()) {
-        picture.start_line = 0;
-      }
-    }
-
-    auto & line {picture.lines.at(picture.end_line)};
-    line.length = 0;
-    line.start = picture.current_point;
-    line.color = color;
-    line.creator = thread_index;
-
-    ClearAccess();
-  }
-
-  bool ScreenNeedsToBeCleared(const ThreadIndex thread_index) {
-    LockAccess();
-    if (drawer_threads.at(thread_index).screen_needs_to_be_cleared) {
-      drawer_threads.at(thread_index).screen_needs_to_be_cleared = false;
-      ClearAccess();
-      return true;
-    }
-    else {
-      ClearAccess();
-      return false;
-    }
-  }
-
-private:
-  void LockAccess() {
-    while (access_flag.test_and_set()) {};
-  }
-
-  void ClearAccess() {
-    access_flag.clear();
-  }
-
-  Picture picture;
-  std::vector<DrawerThread> drawer_threads;
-  std::atomic_flag access_flag{};
-
-  Gdiplus::Bitmap * bitmap_{};
-  std::mutex bitmap_mutex_;
-};
 
 class MultiThreadCompositionPosition {
 public:
@@ -218,7 +40,7 @@ private:
   POINT global_position_{};
 };
 
-using SharedPicture = MultiThreadPicture<20, 1000>;
+
 using SharedPosition = MultiThreadCompositionPosition;
 
 struct ThreadPoolInterface {
@@ -244,6 +66,10 @@ struct ThreadCallback {
     }
   }
 
+  std::size_t MyThreadNumber() const {
+    return thread_number_;
+  }
+
 protected:
   std::size_t thread_number_{};
   ThreadPoolInterface * thread_pool_interface_{};
@@ -258,7 +84,6 @@ public:
     const Gdiplus::Color& pen_color, std::shared_ptr<SharedPosition> shared_position, const POINT window_size)
     : pool_callback_(pool_callback), wnd_proc_function(wnd_proc), shared_picture(shared_picture), 
     pen_color(pen_color), shared_position(shared_position), window_size(window_size) {
-    index_in_shared_picture = shared_picture->AddThread(pen_color);
     is_running = true;
   }
 
@@ -283,18 +108,10 @@ public:
     }
   }
 
-  void UpdateBitmap() {
-    if constexpr (kDrawFromBitmap) {
-      auto * bitmap = shared_picture->LockBitmapAndGetIt();
-      Gdiplus::Graphics graphics(bitmap);
-      DrawPicture(graphics);
-      shared_picture->ReleaseBitmap();
-    }
-  }
-
   void DrawCurrentThreadWindow(HDC& hdc, PAINTSTRUCT& ps) {
     hdc = BeginPaint(this->hwnd, &ps);
-    Draw(hdc);
+    Gdiplus::Graphics graphics(hdc);
+    shared_picture->DrawRasterPicture(graphics);
     EndPaint(this->hwnd, &ps);
   }
 
@@ -312,34 +129,27 @@ public:
     PAINTSTRUCT ps;
     switch (uMsg) {
     case WM_LBUTTONDOWN:
-      StartDrawingLine();
+      shared_picture->AddLine(pen_color);
       break;
 
     case WM_LBUTTONUP:
-      StopDrawingLine();
       break;
 
     case WM_RBUTTONDOWN:
-      ClearPicture();
-      UpdateBitmap();
+      shared_picture->Clear();
+      shared_picture->Rasterize();
       InvalidateRectOfAllThreads(all_threads_hwnd, nullptr, false);
       break;
 
     case WM_MOUSEMOVE:
       if (wParam & MK_LBUTTON) {
         int mouse_x = LOWORD(lParam), mouse_y = HIWORD(lParam);
-        AddPoint(mouse_x, mouse_y);
-        UpdateBitmap();
+        shared_picture->AddPoint(Gdiplus::Point{mouse_x, mouse_y});
+        shared_picture->Rasterize();
         DrawCurrentThreadWindow(hdc, ps);
         InvalidateRectOfAllThreads(all_threads_hwnd, nullptr, false);
       }
-      else {
-        StopDrawingLine();
-      }
       break;
-
-    //case WM_ERASEBKGND:
-    //  return 0;
 
     case WM_MOVING: {
       RECT * rect = reinterpret_cast<RECT*>(lParam);
@@ -351,13 +161,7 @@ public:
     }
 
     case WM_SIZING:
-      RequestScreenClear();
       return 0;
-
-    /*case WM_NCPAINT:
-      //SetWindowPosition();
-      //return 0;
-      return DefWindowProc(hwnd, uMsg, wParam, lParam);*/
 
     case WM_PAINT:
       DrawCurrentThreadWindow(hdc, ps);
@@ -390,10 +194,14 @@ public:
   }
 
   void operator()() {
+    std::size_t thread_number{};
+    if (pool_callback_) {
+      thread_number = pool_callback_->MyThreadNumber();
+    }
     std::string class_name{};
-    class_name += "thread_#" + std::to_string(index_in_shared_picture) + "_class_name";
+    class_name += "thread_#" + std::to_string(thread_number) + "_class_name";
     std::string title{};
-    title += "Thread #" + std::to_string(index_in_shared_picture);
+    title += "Thread #" + std::to_string(thread_number);
     
     POINT position{this->window_position};
     if (this->shared_position) {
@@ -420,104 +228,13 @@ public:
     }
   }
 
-  void StartDrawingLine() {
-    shared_picture->AddLine(index_in_shared_picture, pen_color);
-  }
-
-  void StopDrawingLine() {  }
-
-  void ClearPicture() {
-    shared_picture->ClearPicture(index_in_shared_picture);
-  }
-
-  void AddPoint(const int x, const int y) { AddPoint(Gdiplus::Point{ x, y }); }
-
-  void AddPoint(const Gdiplus::Point& point) {
-    shared_picture->AddPoint(index_in_shared_picture, point);
-  }
-
-  bool ScreenClearRequestedLocally() {
-    if (screen_clear_requested_locally) {
-      screen_clear_requested_locally = false;
-      return true;
-    }
-    else {
-      return false;
-    }
-  }
-
-  void RequestScreenClear() {
-    screen_clear_requested_locally = true;
-  }
-
-  void DrawFromBitmap(Gdiplus::Graphics& graphics) {
-    auto * bitmap = shared_picture->LockBitmapAndGetIt();
-    Gdiplus::Rect sizeR(0, 0, bitmap->GetWidth(), bitmap->GetHeight());
-    graphics.DrawImage(bitmap, sizeR, 0, 0,
-      (int)bitmap->GetWidth(),
-      (int)bitmap->GetHeight(),
-      Gdiplus::UnitPixel);
-    shared_picture->ReleaseBitmap();
-  }
-  
-  void DrawPicture(Gdiplus::Graphics& graphics) {
-    if (ScreenClearRequestedLocally() or
-      shared_picture->ScreenNeedsToBeCleared(index_in_shared_picture)) {
-      graphics.Clear(Gdiplus::Color(255, 255, 255, 255));
-    }
-    graphics.Clear(Gdiplus::Color(255, 255, 255, 255));
-
-    auto picture{ shared_picture->GetPicture() };
-
-    graphics.SetSmoothingMode(Gdiplus::SmoothingMode::SmoothingModeNone);
-    //graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeNone);
-    //graphics.Flush(Gdiplus::FlushIntention::FlushIntentionSync);
-    
-    for (auto & line : picture.lines) {
-      if (line.length != 0) {
-        Gdiplus::Pen pen(line.color, 4.f);
-        if (line.length <= picture.points.size() - line.start) {
-          graphics.DrawLines(&pen, picture.points.data() + line.start, line.length);
-        } else {
-          std::size_t right_part{picture.points.size() - line.start};
-          graphics.DrawLines(&pen, picture.points.data() + line.start, right_part);
-          graphics.DrawLine(&pen, picture.points.back(), picture.points.front());
-          graphics.DrawLines(&pen, picture.points.data(), line.length - right_part);
-        }
-      }
-    }
-
-
-    /*
-    for (std::size_t i{ picture.line_index + 1 }; i < picture.lines.size(); ++i) {
-      Gdiplus::Pen pen(picture.lines.at(i).color, 4.f);
-      graphics.DrawLines(&pen, picture.lines.at(i).points.data(), picture.lines.at(i).index);
-    }
-    for (std::size_t i{}; i <= picture.line_index; ++i) {
-      Gdiplus::Pen pen(picture.lines.at(i).color, 4.f);
-      graphics.DrawLines(&pen, picture.lines.at(i).points.data(), picture.lines.at(i).index);
-    }//*/
-  }
-
-  void Draw(HDC hdc) {
-    Gdiplus::Graphics graphics(hdc);
-    if constexpr (kDrawFromBitmap) {
-      DrawFromBitmap(graphics);
-    } else {
-      DrawPicture(graphics);
-    }
-  }
-
 protected:
   std::shared_ptr<SharedPicture> shared_picture;
   std::shared_ptr<SharedPosition> shared_position;
-  SharedPicture::ThreadIndex index_in_shared_picture{};
 
   ThreadCallback * pool_callback_;
 
   bool is_running{ false };
-  bool screen_clear_requested_locally{ false };
-
 
   HWND hwnd{ nullptr };
   POINT window_size{}, window_position{};
@@ -759,7 +476,7 @@ BOOL WINAPI CtrlHandler(DWORD fdwCtrlType) {
 
 void RunThreads() {
   SetConsoleCtrlHandler(CtrlHandler, TRUE);
-  auto shared_picture = std::make_shared<SharedPicture>();
+  auto shared_picture = std::make_shared<SharedPicture>(kPointsCount, kLinesCount, kDefaultWindowSize);
   g_thread_pool.AddNewThread(NameOfWndProcForThread(0), shared_picture, Gdiplus::Color{ 255,255,0,0 });
   g_thread_pool.AddNewThread(NameOfWndProcForThread(1), shared_picture, Gdiplus::Color{ 255,0,193,255 });
   g_thread_pool.AddNewThread(NameOfWndProcForThread(2), shared_picture, Gdiplus::Color{ 255,0,155,0 });
@@ -772,43 +489,17 @@ void RunThreads() {
 
 int main() {
 
-  const std::string file_name{"shared_file.txt"};
-  HANDLE file = CreateFile(file_name.c_str(), GENERIC_READ | GENERIC_WRITE, 
-                           FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
-                           CREATE_ALWAYS, FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE | FILE_FLAG_SEQUENTIAL_SCAN, 
-                           NULL);
-
-  HANDLE mapped_file = CreateFileMapping(file, NULL, PAGE_READWRITE, 0, 
-                                         kMaxSizeOfMappedFile, kNameOfMappedFile.c_str());
-
-
-  if (mapped_file == NULL) {
-    std::cout << "CreateFileMapping() failed, " << GetLastError() << std::endl;
-    _getch();
-    return 1;
+  SharedMemory memory{ kSharedFileNameOnDisk, kMappedFileName, kMaxSizeOfMappedFile };
+  try {
+    memory.Create();
+    memory.MapViewBuffer();
+    auto buffer{memory.GetViewBuffer()};
+    int x{12334};
+    memcpy((void*)buffer, &x, sizeof(x));
+  } catch (SharedMemory::errors::General& e) {
+    std::cout << "shared memory failed, " << e.what() << std::endl;
   }
-
-  LPCTSTR buffer = (LPTSTR)MapViewOfFile(mapped_file, FILE_MAP_ALL_ACCESS,
-                                         0, 0, kMaxSizeOfMappedFile);
-  if (buffer == NULL) {
-    std::cout << "MapViewFile() failed" << std::endl;
-    CloseHandle(mapped_file);
-    _getch();
-    return 1;
-  }
-
-  UnmapViewOfFile(buffer);
-  CloseHandle(mapped_file);
-  CloseHandle(file);
-
-
-  char * current_directory = new char[256];
-  GetCurrentDirectory(256, current_directory);
-  std::cout << "current dir = " << current_directory << std::endl;
-
 
   RunThreads();
-
   _getch();
-
 }

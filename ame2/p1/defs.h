@@ -4,9 +4,12 @@
 #include <windows.h>
 #include <string>
 
+inline const std::size_t kPointsCount{1000};
+inline const std::size_t kLinesCount{20};
 inline const POINT kDefaultWindowSize{ 300, 300 };
-constexpr int kMaxSizeOfMappedFile{ 1'000'000 };
-const std::string kNameOfMappedFile{ "Local\\TestFileMappingObject1236" };
+constexpr std::size_t kMaxSizeOfMappedFile{ 1024 * 1024 };
+const std::string kMappedFileName{ "Local\\TestFileMappingObject1236" };
+const std::string kSharedFileNameOnDisk{ "shared_file.txt" };
 
 template <typename WNDPROC_function>
 HWND CreateWindowForThread(HINSTANCE hInstance, WNDPROC_function WindowProc,
@@ -42,4 +45,5 @@ HWND CreateWindowForThread(HINSTANCE hInstance, WNDPROC_function WindowProc,
   UpdateWindow(hwnd);
   return hwnd;
 }
+
 

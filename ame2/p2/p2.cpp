@@ -5,6 +5,7 @@
 #include <iostream>
 
 #include "defs.h"
+#include "shared_memory.h"
 
 #pragma comment(lib, "gdiplus.lib")
 
@@ -43,25 +44,23 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   return 0;
 }
 
-Gdiplus::Bitmap b;
+//Gdiplus::Bitmap b;
 
 
 
 int main() {
 
-  b.s
-
-  HANDLE map_file;
-  LPCTSTR buffer;
-
-  map_file = OpenFileMapping(FILE_MAP_READ, FALSE, kNameOfMappedFile.c_str());
-
-  if (map_file == NULL) {
-    //_tprintf(TEXT("Could not open file mapping object (%d).\n"), GetLastError());
-    return 1;
+  SharedMemory memory{ kSharedFileNameOnDisk, kMappedFileName, kMaxSizeOfMappedFile };
+  try {
+    memory.Open();
+    memory.MapViewBuffer();
+    auto buffer{ memory.GetViewBuffer() };
+    int x{ 0 };
+    memcpy(&x, (void*)buffer, sizeof(x));
+    std::cout << x << std::endl;
+  } catch (SharedMemory::errors::General& e) {
+    std::cout << "shared memory failed, " << e.what() << std::endl;
   }
-
-  buffer = (LPTSTR)MapViewOfFile(map_file, FILE_MAP_READ, 0, 0, kMaxSizeOfMappedFile);
 
 
 

@@ -23,5 +23,14 @@
     <ClInclude Include="defs.h">
       <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="shared_memory.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="shared_picture.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="spinlock.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
