@@ -4,6 +4,7 @@
 #include <windows.h>
 #include <gdiplus.h>
 
+#include <cassert>
 #include <vector>
 #include <thread>
 #include <atomic>
@@ -18,9 +19,36 @@ struct VectorPicture {
     Gdiplus::Color color;
   };
 
+  std::vector<Gdiplus::Point> points{};
+  std::vector<Line> lines{};
+  std::size_t current_point{}, start_line{}, end_line{};
+
+  VectorPicture() = default;
+
   VectorPicture(const std::size_t points_count, const std::size_t lines_count) {
+    init(points_count, lines_count);
+  }
+
+  VectorPicture(const VectorPicture& other) {
+    InitFromOther(other);
+  }
+
+  VectorPicture& operator=(const VectorPicture& other) {
+    InitFromOther(other);
+    return *this;
+  }
+
+  void InitFromOther(const VectorPicture& other) {
+    this->points = other.points;
+    this->lines = other.lines;
+    this->current_point = other.current_point;
+    this->start_line = other.start_line;
+    this->end_line = other.end_line;
+  }
+
+  void init(const std::size_t points_count, const std::size_t lines_count) {
     points.reserve(points_count);
-    points.assign(points_count, Gdiplus::Point{0, 0});
+    points.assign(points_count, Gdiplus::Point{ 0, 0 });
     lines.reserve(lines_count);
     lines.assign(lines_count, Line{});
   }
@@ -32,11 +60,6 @@ struct VectorPicture {
     }
     start_line = end_line = 0;
   }
-
-  std::vector<Gdiplus::Point> points{};
-  std::vector<Line> lines{};
-  std::size_t current_point{}, start_line{}, end_line{};
-
 
   std::size_t TotalSize() const {
     return sizeof(current_point) + sizeof(start_line) + sizeof(end_line) +
@@ -167,14 +190,20 @@ public:
   RasterPicture(const POINT& size) {
     create(size);
   }
+  ~RasterPicture() {
+    ::delete bitmap_;
+    bitmap_ = nullptr;
+  }
 
   Gdiplus::Bitmap * GetBitmap() {
     return bitmap_;
   }
 
   void create(const POINT& size) {
-    delete bitmap_;
-    bitmap_ = new Gdiplus::Bitmap(size.x, size.y, PixelFormat32bppRGB);
+    ::delete bitmap_;
+    std::cout << sizeof(Gdiplus::Bitmap) << std::endl;
+    bitmap_ = ::new Gdiplus::Bitmap{size.x, size.y, PixelFormat32bppRGB};
+    assert(bitmap_);
     clear();
   }
  
@@ -191,10 +220,22 @@ private:
 
 class SharedPicture {
 public:
+  SharedPicture() = default;
+  SharedPicture(const POINT& bitmap_size) : raster_{ bitmap_size } { }
   SharedPicture(const std::size_t points_count, 
                 const std::size_t lines_count,
                 const POINT& bitmap_size) : 
     vector_{points_count, lines_count}, raster_{bitmap_size} { }
+
+  void SetVectorPicture(const VectorPicture& vector_picture) {
+    std::lock_guard<SpinLock> lock{this->vector_lock_};
+    this->vector_ = vector_picture;
+  }
+
+  void OutputVectorPictureToOstream(std::ostream& os) {
+    std::lock_guard<SpinLock> losk{this->vector_lock_};
+    os << this->vector_;
+  }
 
   void AddPoint(const Gdiplus::Point& point) {
     std::lock_guard<SpinLock> lock{ vector_lock_ };
@@ -208,9 +249,9 @@ public:
  
   void DrawVectorPicture(Gdiplus::Graphics& graphics) {
     graphics.Clear(Gdiplus::Color(255, 255, 255, 255));
-    graphics.SetSmoothingMode(Gdiplus::SmoothingMode::SmoothingModeNone);
-    graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeNone);
-    graphics.Flush(Gdiplus::FlushIntention::FlushIntentionSync);
+    //graphics.SetSmoothingMode(Gdiplus::SmoothingMode::SmoothingModeNone);
+    //graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeNone);
+    //graphics.Flush(Gdiplus::FlushIntention::FlushIntentionSync);
 
     std::lock_guard<SpinLock> lock{vector_lock_};
     for (auto & line : vector_.lines) {
@@ -250,7 +291,7 @@ public:
     vector_.clear();
   }
 
-private:
+//private:
   VectorPicture vector_;
   RasterPicture raster_;
   SpinLock vector_lock_, raster_lock_;

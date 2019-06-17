@@ -7,7 +7,7 @@
 inline const std::size_t kPointsCount{1000};
 inline const std::size_t kLinesCount{20};
 inline const POINT kDefaultWindowSize{ 300, 300 };
-constexpr std::size_t kMaxSizeOfMappedFile{ 1024 * 1024 };
+constexpr std::size_t kMaxSizeOfMappedFile{ 100 * 1024 };
 const std::string kMappedFileName{ "Local\\TestFileMappingObject1236" };
 const std::string kSharedFileNameOnDisk{ "shared_file.txt" };
 

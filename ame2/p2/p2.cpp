@@ -5,11 +5,43 @@
 #include <iostream>
 
 #include "defs.h"
+#include "shared_picture.h"
 #include "shared_memory.h"
 
 #pragma comment(lib, "gdiplus.lib")
 
+SharedPicture g_picture{ kDefaultWindowSize };
+SharedMemory g_memory{ kSharedFileNameOnDisk, kMappedFileName, kMaxSizeOfMappedFile };
+HWND g_hwnd{};
 
+void LoadSharedPictureFromSharedMemory() {
+  try {
+    if (not g_memory.IsOpened()) {
+      g_memory.Open();
+    }
+    if (not g_memory.IsMapped()) {
+      g_memory.MapViewBuffer();
+    }
+    char * buffer{ const_cast<char *>(g_memory.GetViewBuffer()) };
+    membuf sbuf(buffer, buffer + g_memory.GetMappedSize());
+    std::istream in(&sbuf);
+    VectorPicture v;
+    in >> v;
+    g_picture.SetVectorPicture(v);
+    g_picture.Rasterize();
+    std::cout << g_picture.vector_.current_point << std::endl;
+  }
+  catch (SharedMemory::errors::General& e) {
+    std::cout << "shared memory failed, " << e.what() << std::endl;
+  }
+}
+
+void DrawCurrentThreadWindow(HDC& hdc, PAINTSTRUCT& ps) {
+  hdc = BeginPaint(g_hwnd, &ps);
+  Gdiplus::Graphics graphics(hdc);
+  g_picture.DrawRasterPicture(graphics);
+  EndPaint(g_hwnd, &ps);
+}
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   HDC hdc;
@@ -17,25 +49,22 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   switch (uMsg) {
 
   case WM_LBUTTONDOWN:
-    // load picture
-    //ClearPicture();
-    //UpdateBitmap();
-    //InvalidateRectOfAllThreads(all_threads_hwnd, nullptr, false);
+    LoadSharedPictureFromSharedMemory();
+    InvalidateRect(g_hwnd, NULL, false);
     break;
 
   case WM_RBUTTONDOWN:
-    // clear picture
-    //ClearPicture();
-    //UpdateBitmap();
-    //InvalidateRectOfAllThreads(all_threads_hwnd, nullptr, false);
+    g_picture.Clear();
+    g_picture.Rasterize();
+    InvalidateRect(g_hwnd, NULL, false);
     break;
 
   case WM_PAINT:
-    //DrawCurrentThreadWindow(hdc, ps);
+    DrawCurrentThreadWindow(hdc, ps);
     return 0;
 
   case WM_DESTROY:
-   // is_running = false;
+    PostQuitMessage(0);
     return 0;
 
   default:
@@ -49,23 +78,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 
 
 int main() {
-
-  SharedMemory memory{ kSharedFileNameOnDisk, kMappedFileName, kMaxSizeOfMappedFile };
-  try {
-    memory.Open();
-    memory.MapViewBuffer();
-    auto buffer{ memory.GetViewBuffer() };
-    int x{ 0 };
-    memcpy(&x, (void*)buffer, sizeof(x));
-    std::cout << x << std::endl;
-  } catch (SharedMemory::errors::General& e) {
-    std::cout << "shared memory failed, " << e.what() << std::endl;
-  }
-
-
+  Gdiplus::GdiplusStartupInput gdiplusStartupInput;
+  ULONG_PTR gdiplusToken;
+  Gdiplus::GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, NULL);
 
   POINT position{ 0, 0 };
-  HWND hwnd = CreateWindowForThread(
+  g_hwnd = CreateWindowForThread(
     GetModuleHandle(NULL), WndProc, "another_process_class_name",
     "Another process", position, POINT{300, 300});
 
@@ -77,5 +95,6 @@ int main() {
     //}
     //std::this_thread::yield();
   }
+  Gdiplus::GdiplusShutdown(gdiplusToken);
 }
 

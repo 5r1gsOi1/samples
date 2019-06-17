@@ -12,6 +12,7 @@
 #include <atomic>
 #include <mutex>
 #include <thread>
+#include <sstream>
 
 #include "defs.h"
 #include "shared_memory.h"
@@ -19,7 +20,8 @@
 
 #pragma comment(lib, "gdiplus.lib")
 
-#define WM_SHARED_POSITION_CHANGED (WM_APP + 0x0001)
+#define WM_SHARED_POSITION_CHANGED  (WM_APP + 0x0001)
+#define WM_CUSTOM_ACTIVATE          (WM_APP + 0x0002)
 
 constexpr bool kDrawFromBitmap{ true };
 
@@ -80,12 +82,17 @@ public:
   ThreadData() = delete;
   ThreadData(ThreadData&) = delete;
   ThreadData(ThreadData&&) = default;
-  ThreadData(ThreadCallback * pool_callback, WNDPROC wnd_proc, std::shared_ptr<SharedPicture> shared_picture,
-    const Gdiplus::Color& pen_color, std::shared_ptr<SharedPosition> shared_position, const POINT window_size)
+  ThreadData(
+    ThreadCallback * pool_callback, 
+    WNDPROC wnd_proc, 
+    std::shared_ptr<SharedPicture> shared_picture,
+    std::shared_ptr<SharedMemory> shared_memory,
+    std::shared_ptr<SharedPosition> shared_position,
+    const Gdiplus::Color& pen_color,
+    const POINT window_size)
     : pool_callback_(pool_callback), wnd_proc_function(wnd_proc), shared_picture(shared_picture), 
-    pen_color(pen_color), shared_position(shared_position), window_size(window_size) {
-    is_running = true;
-  }
+    shared_memory(shared_memory), shared_position(shared_position), pen_color(pen_color), 
+    window_size(window_size), is_running(true) {}
 
   ~ThreadData() = default;
 
@@ -124,15 +131,39 @@ public:
     }
   }
 
+  void StorePictureToSharedMemory() {
+    if (not shared_memory) {
+      return;
+    }
+    try {
+      if (not shared_memory->IsOpened()) {
+        shared_memory->Create();
+      }
+      if (not shared_memory->IsMapped()) {
+        shared_memory->MapViewBuffer();
+      }
+      char * buffer{ const_cast<char *>(shared_memory->GetViewBuffer()) };
+
+      ostreambuf<char> ostreamBuffer(buffer, shared_memory->GetMappedSize());
+      std::ostream os(&ostreamBuffer);
+      shared_picture->OutputVectorPictureToOstream(os);
+      os.flush();
+    }
+    catch (SharedMemory::errors::General& e) {
+      std::cout << "SharedMemory erorr" << e.what() << std::endl;
+    }
+  }
+
   LRESULT CALLBACK WndProc(const std::vector<HWND>& all_threads_hwnd, HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     HDC hdc;
     PAINTSTRUCT ps;
     switch (uMsg) {
-    case WM_LBUTTONDOWN:
-      shared_picture->AddLine(pen_color);
+    case WM_MBUTTONDOWN:
+      StorePictureToSharedMemory();
       break;
 
-    case WM_LBUTTONUP:
+    case WM_LBUTTONDOWN:
+      shared_picture->AddLine(pen_color);
       break;
 
     case WM_RBUTTONDOWN:
@@ -159,7 +190,7 @@ public:
       }
       return 0;
     }
-
+   
     case WM_SIZING:
       return 0;
 
@@ -231,6 +262,7 @@ public:
 protected:
   std::shared_ptr<SharedPicture> shared_picture;
   std::shared_ptr<SharedPosition> shared_position;
+  std::shared_ptr<SharedMemory> shared_memory;
 
   ThreadCallback * pool_callback_;
 
@@ -336,12 +368,13 @@ public:
   }
 
   virtual void AddNewThread(WNDPROC wnd_proc, std::shared_ptr<SharedPicture> shared_picture, 
+                            std::shared_ptr<SharedMemory> shared_memory,
                             const Gdiplus::Color& pen_color) {
     if (not is_running_) {
       std::size_t new_thread_number{threads_controls_.size()};
       auto callback{new ThreadCallback{this, new_thread_number}};
-      auto data{new ThreadData{callback, wnd_proc, shared_picture, pen_color, 
-        shared_position_, this->windows_size_}};
+      auto data{new ThreadData{callback, wnd_proc, shared_picture, shared_memory, 
+        shared_position_, pen_color, this->windows_size_}};
       auto control{std::make_unique<ThreadControl>(data, callback)};
       threads_controls_.emplace_back(std::move(control));
     }
@@ -477,29 +510,15 @@ BOOL WINAPI CtrlHandler(DWORD fdwCtrlType) {
 void RunThreads() {
   SetConsoleCtrlHandler(CtrlHandler, TRUE);
   auto shared_picture = std::make_shared<SharedPicture>(kPointsCount, kLinesCount, kDefaultWindowSize);
-  g_thread_pool.AddNewThread(NameOfWndProcForThread(0), shared_picture, Gdiplus::Color{ 255,255,0,0 });
-  g_thread_pool.AddNewThread(NameOfWndProcForThread(1), shared_picture, Gdiplus::Color{ 255,0,193,255 });
-  g_thread_pool.AddNewThread(NameOfWndProcForThread(2), shared_picture, Gdiplus::Color{ 255,0,155,0 });
-  g_thread_pool.AddNewThread(NameOfWndProcForThread(3), shared_picture, Gdiplus::Color{ 255,255,180,0 });
+  auto shared_memory = std::make_shared<SharedMemory>(kSharedFileNameOnDisk, kMappedFileName, kMaxSizeOfMappedFile);
+  g_thread_pool.AddNewThread(NameOfWndProcForThread(0), shared_picture, shared_memory, Gdiplus::Color{ 255,255,0,0 });
+  g_thread_pool.AddNewThread(NameOfWndProcForThread(1), shared_picture, shared_memory, Gdiplus::Color{ 255,0,193,255 });
+  g_thread_pool.AddNewThread(NameOfWndProcForThread(2), shared_picture, shared_memory, Gdiplus::Color{ 255,0,155,0 });
+  g_thread_pool.AddNewThread(NameOfWndProcForThread(3), shared_picture, shared_memory, Gdiplus::Color{ 255,255,180,0 });
   g_thread_pool.StartThreads();
 }
 
-
-
-
 int main() {
-
-  SharedMemory memory{ kSharedFileNameOnDisk, kMappedFileName, kMaxSizeOfMappedFile };
-  try {
-    memory.Create();
-    memory.MapViewBuffer();
-    auto buffer{memory.GetViewBuffer()};
-    int x{12334};
-    memcpy((void*)buffer, &x, sizeof(x));
-  } catch (SharedMemory::errors::General& e) {
-    std::cout << "shared memory failed, " << e.what() << std::endl;
-  }
-
   RunThreads();
   _getch();
 }

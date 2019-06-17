@@ -3,6 +3,7 @@
 #include <windows.h>
 #include <string>
 #include <stdexcept>
+#include <streambuf>
 
 class SharedMemory {
 public:
@@ -65,6 +66,14 @@ public:
     }
   }
 
+  bool IsOpened() const {
+    return mapped_file_ != NULL;
+  }
+
+  bool IsMapped() const {
+    return buffer_is_mapped_;
+  }
+
   void fini() {
     if (buffer_is_mapped_) {
       UnmapViewOfFile(mapped_buffer_);
@@ -79,6 +88,9 @@ public:
       CloseHandle(file_);
       file_ = NULL;
     }
+  }
+  std::size_t GetMappedSize() {
+    return this->mapped_file_size_;
   }
 
   void MapViewBuffer() {
@@ -105,8 +117,7 @@ public:
   LPCTSTR GetViewBuffer() {
     if (buffer_is_mapped_) {
       return mapped_buffer_;
-    }
-    else {
+    } else {
       return NULL;
     }
   }
@@ -121,4 +132,18 @@ private:
   bool buffer_is_mapped_{ false };
 };
 
+// https://stackoverflow.com/questions/7781898/get-an-istream-from-a-char
+struct membuf : std::streambuf {
+  membuf(char* begin, char* end) {
+    this->setg(begin, begin, end);
+  }
+};
 
+// https://stackoverflow.com/questions/1494182/setting-the-internal-buffer-used-by-a-standard-stream-pubsetbuf
+template <typename char_type>
+struct ostreambuf : public std::basic_streambuf<char_type, std::char_traits<char_type>> {
+  ostreambuf(char_type* buffer, std::streamsize bufferLength) {
+    // set the "put" pointer the start of the buffer and record it's length.
+    std::basic_streambuf<char_type, std::char_traits<char_type>>::setp(buffer, buffer + bufferLength);
+  }
+};
