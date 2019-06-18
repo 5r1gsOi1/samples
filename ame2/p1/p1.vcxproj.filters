@@ -18,6 +18,9 @@
     <ClCompile Include="p1.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="jzon.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="defs.h">
@@ -30,6 +33,9 @@
       <Filter>Source Files</Filter>
     </ClInclude>
     <ClInclude Include="spinlock.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="jzon.h">
       <Filter>Source Files</Filter>
     </ClInclude>
   </ItemGroup>

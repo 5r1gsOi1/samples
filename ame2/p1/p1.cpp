@@ -146,7 +146,10 @@ public:
 
       ostreambuf<char> ostreamBuffer(buffer, shared_memory->GetMappedSize());
       std::ostream os(&ostreamBuffer);
-      shared_picture->OutputVectorPictureToOstream(os);
+      auto json_string{shared_picture->vector_.SerializeToJson()};
+      const std::size_t size{ json_string.size() };
+      os.write(reinterpret_cast<const char*>(&size), sizeof(size));
+      os << json_string;
       os.flush();
     }
     catch (SharedMemory::errors::General& e) {

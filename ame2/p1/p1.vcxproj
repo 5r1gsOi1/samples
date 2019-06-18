@@ -120,10 +120,12 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="jzon.cpp" />
     <ClCompile Include="p1.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="defs.h" />
+    <ClInclude Include="jzon.h" />
     <ClInclude Include="shared_memory.h" />
     <ClInclude Include="shared_picture.h" />
     <ClInclude Include="spinlock.h" />

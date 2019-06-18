@@ -121,6 +121,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\p1\jzon.cpp" />
     <ClCompile Include="p2.cpp" />
   </ItemGroup>
   <ItemGroup>

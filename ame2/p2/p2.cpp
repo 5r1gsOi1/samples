@@ -10,26 +10,28 @@
 
 #pragma comment(lib, "gdiplus.lib")
 
-SharedPicture g_picture{ kDefaultWindowSize };
-SharedMemory g_memory{ kSharedFileNameOnDisk, kMappedFileName, kMaxSizeOfMappedFile };
+std::shared_ptr<SharedPicture> g_picture;
+std::shared_ptr<SharedMemory> g_memory;
 HWND g_hwnd{};
 
 void LoadSharedPictureFromSharedMemory() {
   try {
-    if (not g_memory.IsOpened()) {
-      g_memory.Open();
+    if (not g_memory->IsOpened()) {
+      g_memory->Open();
     }
-    if (not g_memory.IsMapped()) {
-      g_memory.MapViewBuffer();
+    if (not g_memory->IsMapped()) {
+      g_memory->MapViewBuffer();
     }
-    char * buffer{ const_cast<char *>(g_memory.GetViewBuffer()) };
-    membuf sbuf(buffer, buffer + g_memory.GetMappedSize());
-    std::istream in(&sbuf);
+    char * buffer{ const_cast<char *>(g_memory->GetViewBuffer()) };
+    std::size_t size{};
+    std::copy(buffer, buffer + sizeof(std::size_t), reinterpret_cast<char*>(&size));
+
+    std::string json_string(buffer + sizeof(std::size_t), size);
     VectorPicture v;
-    in >> v;
-    g_picture.SetVectorPicture(v);
-    g_picture.Rasterize();
-    std::cout << g_picture.vector_.current_point << std::endl;
+    v.LoadFromJson(json_string);
+
+    g_picture->SetVectorPicture(v);
+    g_picture->Rasterize();
   }
   catch (SharedMemory::errors::General& e) {
     std::cout << "shared memory failed, " << e.what() << std::endl;
@@ -39,7 +41,7 @@ void LoadSharedPictureFromSharedMemory() {
 void DrawCurrentThreadWindow(HDC& hdc, PAINTSTRUCT& ps) {
   hdc = BeginPaint(g_hwnd, &ps);
   Gdiplus::Graphics graphics(hdc);
-  g_picture.DrawRasterPicture(graphics);
+  g_picture->DrawRasterPicture(graphics);
   EndPaint(g_hwnd, &ps);
 }
 
@@ -54,8 +56,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     break;
 
   case WM_RBUTTONDOWN:
-    g_picture.Clear();
-    g_picture.Rasterize();
+    g_picture->Clear();
+    g_picture->Rasterize();
     InvalidateRect(g_hwnd, NULL, false);
     break;
 
@@ -73,7 +75,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   return 0;
 }
 
-//Gdiplus::Bitmap b;
 
 
 
@@ -81,6 +82,9 @@ int main() {
   Gdiplus::GdiplusStartupInput gdiplusStartupInput;
   ULONG_PTR gdiplusToken;
   Gdiplus::GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, NULL);
+
+  g_picture = std::make_shared<SharedPicture>(kDefaultWindowSize);
+  g_memory = std::make_shared<SharedMemory>(kSharedFileNameOnDisk, kMappedFileName, kMaxSizeOfMappedFile);
 
   POINT position{ 0, 0 };
   g_hwnd = CreateWindowForThread(
