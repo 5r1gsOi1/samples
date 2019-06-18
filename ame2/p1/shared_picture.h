@@ -288,7 +288,23 @@ public:
     std::lock_guard<SpinLock> lock{ vector_lock_ };
     vector_.AddLine(color);
   }
- 
+
+  void DrawLine(Gdiplus::Graphics& graphics, const std::size_t index) {
+    auto &lines = vector_.lines;
+    if (lines[index].length != 0) {
+      Gdiplus::Pen pen(lines[index].color, 4.f);
+      if (lines[index].length <= vector_.points.size() - lines[index].start) {
+        graphics.DrawLines(&pen, vector_.points.data() + lines[index].start, lines[index].length);
+      }
+      else {
+        std::size_t right_part{ vector_.points.size() - lines[index].start };
+        graphics.DrawLines(&pen, vector_.points.data() + lines[index].start, right_part);
+        graphics.DrawLine(&pen, vector_.points.back(), vector_.points.front());
+        graphics.DrawLines(&pen, vector_.points.data(), lines[index].length - right_part);
+      }
+    }
+  }
+
   void DrawVectorPicture(Gdiplus::Graphics& graphics) {
     graphics.Clear(Gdiplus::Color(255, 255, 255, 255));
     //graphics.SetSmoothingMode(Gdiplus::SmoothingMode::SmoothingModeNone);
@@ -296,17 +312,15 @@ public:
     //graphics.Flush(Gdiplus::FlushIntention::FlushIntentionSync);
 
     std::lock_guard<SpinLock> lock{vector_lock_};
-    for (auto & line : vector_.lines) {
-      if (line.length != 0) {
-        Gdiplus::Pen pen(line.color, 4.f);
-        if (line.length <= vector_.points.size() - line.start) {
-          graphics.DrawLines(&pen, vector_.points.data() + line.start, line.length);
-        } else {
-          std::size_t right_part{ vector_.points.size() - line.start };
-          graphics.DrawLines(&pen, vector_.points.data() + line.start, right_part);
-          graphics.DrawLine(&pen, vector_.points.back(), vector_.points.front());
-          graphics.DrawLines(&pen, vector_.points.data(), line.length - right_part);
-        }
+    auto &lines = vector_.lines;
+    auto max_line{(std::max)(vector_.end_line, lines.size() - 1)};
+    for (std::size_t i{vector_.start_line}; i <= max_line; ++i) {
+      DrawLine(graphics, i);  
+    }
+
+    if (vector_.end_line < vector_.start_line) {
+      for (std::size_t i{}; i <= vector_.end_line; ++i) {
+        DrawLine(graphics, i);
       }
     }
   }
