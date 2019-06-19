@@ -167,6 +167,8 @@ public:
 
     case WM_LBUTTONDOWN:
       shared_picture->AddLine(pen_color);
+      shared_picture->Rasterize();
+      InvalidateRectOfAllThreads(all_threads_hwnd, nullptr, false);
       break;
 
     case WM_RBUTTONDOWN:

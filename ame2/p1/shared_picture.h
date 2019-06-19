@@ -86,7 +86,7 @@ struct VectorPicture {
   void AddPoint(const Gdiplus::Point& point) {
     if (current_point == lines.at(start_line).start) {
       DecrementLineFromLeftSide(start_line);
-      if (lines.at(start_line).length == 0 and start_line != end_line) {
+      while (lines.at(start_line).length == 0 and start_line != end_line) {
         ++start_line;
         if (start_line >= lines.size()) {
           start_line = 0;
@@ -239,7 +239,9 @@ public:
     create(size);
   }
   ~RasterPicture() {
-    delete bitmap_;
+    if (bitmap_) {
+      delete bitmap_;
+    }
     bitmap_ = nullptr;
   }
 
@@ -290,17 +292,18 @@ public:
   }
 
   void DrawLine(Gdiplus::Graphics& graphics, const std::size_t index) {
-    auto &lines = vector_.lines;
-    if (lines[index].length != 0) {
-      Gdiplus::Pen pen(lines[index].color, 4.f);
-      if (lines[index].length <= vector_.points.size() - lines[index].start) {
-        graphics.DrawLines(&pen, vector_.points.data() + lines[index].start, lines[index].length);
+    auto &line = vector_.lines[index];
+    auto &points = vector_.points;
+    if (line.length != 0) {
+      Gdiplus::Pen pen(line.color, 4.f);
+      if (line.length <= points.size() - line.start) {
+        graphics.DrawLines(&pen, points.data() + line.start, line.length);
       }
       else {
-        std::size_t right_part{ vector_.points.size() - lines[index].start };
-        graphics.DrawLines(&pen, vector_.points.data() + lines[index].start, right_part);
-        graphics.DrawLine(&pen, vector_.points.back(), vector_.points.front());
-        graphics.DrawLines(&pen, vector_.points.data(), lines[index].length - right_part);
+        std::size_t right_part{ points.size() - line.start };
+        graphics.DrawLines(&pen, points.data() + line.start, right_part);
+        graphics.DrawLine(&pen, points.back(), points.front());
+        graphics.DrawLines(&pen, points.data(), line.length - right_part);
       }
     }
   }
@@ -312,8 +315,7 @@ public:
     //graphics.Flush(Gdiplus::FlushIntention::FlushIntentionSync);
 
     std::lock_guard<SpinLock> lock{vector_lock_};
-    auto &lines = vector_.lines;
-    auto max_line{(std::max)(vector_.end_line, lines.size() - 1)};
+    auto max_line{(std::max)(vector_.end_line, vector_.lines.size() - 1)};
     for (std::size_t i{vector_.start_line}; i <= max_line; ++i) {
       DrawLine(graphics, i);  
     }
