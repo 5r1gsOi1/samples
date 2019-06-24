@@ -18,7 +18,7 @@
     <ClCompile Include="p1.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="jzon.cpp">
+    <ClCompile Include="..\..\_general\jzon.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -30,12 +30,6 @@
       <Filter>Source Files</Filter>
     </ClInclude>
     <ClInclude Include="shared_picture.h">
-      <Filter>Source Files</Filter>
-    </ClInclude>
-    <ClInclude Include="spinlock.h">
-      <Filter>Source Files</Filter>
-    </ClInclude>
-    <ClInclude Include="jzon.h">
       <Filter>Source Files</Filter>
     </ClInclude>
   </ItemGroup>

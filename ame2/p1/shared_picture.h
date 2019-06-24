@@ -221,7 +221,7 @@ struct VectorPicture {
 
 private:
   void DecrementLineFromLeftSide(const std::size_t line_index) {
-    auto & line = lines.at(line_index);
+    auto& line {lines.at(line_index)};
     if (line.length > 0) {
       --line.length;
       ++line.start;
@@ -292,8 +292,8 @@ public:
   }
 
   void DrawLine(Gdiplus::Graphics& graphics, const std::size_t index) {
-    auto &line = vector_.lines[index];
-    auto &points = vector_.points;
+    auto &line{vector_.lines[index]};
+    auto &points{vector_.points};
     if (line.length != 0) {
       Gdiplus::Pen pen(line.color, 4.f);
       if (line.length <= points.size() - line.start) {
@@ -315,33 +315,39 @@ public:
     //graphics.Flush(Gdiplus::FlushIntention::FlushIntentionSync);
 
     std::lock_guard<SpinLock> lock{vector_lock_};
-    auto max_line{(std::max)(vector_.end_line, vector_.lines.size() - 1)};
-    for (std::size_t i{vector_.start_line}; i <= max_line; ++i) {
-      DrawLine(graphics, i);  
-    }
+    if (not vector_.lines.empty()) {
+      auto max_line{(std::max)(vector_.end_line, vector_.lines.size() - 1)};
+      for (std::size_t i{vector_.start_line}; i <= max_line; ++i) {
+        DrawLine(graphics, i);  
+      }
 
-    if (vector_.end_line < vector_.start_line) {
-      for (std::size_t i{}; i <= vector_.end_line; ++i) {
-        DrawLine(graphics, i);
+      if (vector_.end_line < vector_.start_line) {
+        for (std::size_t i{}; i <= vector_.end_line; ++i) {
+          DrawLine(graphics, i);
+        }
       }
     }
   }
 
   void DrawRasterPicture(Gdiplus::Graphics& graphics) {
     std::lock_guard<SpinLock> lock{raster_lock_};
-    auto * bitmap = raster_.GetBitmap();
-    Gdiplus::Rect size{0, 0, (INT)bitmap->GetWidth(), (INT)bitmap->GetHeight()};
-    graphics.DrawImage(bitmap, size, 0, 0,
-      (int)bitmap->GetWidth(),
-      (int)bitmap->GetHeight(),
-      Gdiplus::UnitPixel);
+    auto * bitmap{raster_.GetBitmap()};
+    if (bitmap) {
+      Gdiplus::Rect size{0, 0, (INT)bitmap->GetWidth(), (INT)bitmap->GetHeight()};
+      graphics.DrawImage(bitmap, size, 0, 0,
+        (int)bitmap->GetWidth(),
+        (int)bitmap->GetHeight(),
+        Gdiplus::UnitPixel);
+    }
   }
 
   void Rasterize() {
     std::lock_guard<SpinLock> lock{ raster_lock_ };
-    auto * bitmap = raster_.GetBitmap();
-    Gdiplus::Graphics graphics{bitmap};
-    DrawVectorPicture(graphics);
+    auto * bitmap{raster_.GetBitmap()};
+    if (bitmap) {
+      Gdiplus::Graphics graphics{bitmap};
+      DrawVectorPicture(graphics);
+    }
   }
 
   void Clear() {
