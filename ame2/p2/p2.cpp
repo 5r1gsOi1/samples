@@ -75,9 +75,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   return 0;
 }
 
-
-
-
 int main() {
   Gdiplus::GdiplusStartupInput gdiplusStartupInput;
   ULONG_PTR gdiplusToken;
@@ -99,6 +96,10 @@ int main() {
     //}
     //std::this_thread::yield();
   }
+
+  g_picture.reset();
+  g_memory.reset();
+
   Gdiplus::GdiplusShutdown(gdiplusToken);
 }
 
