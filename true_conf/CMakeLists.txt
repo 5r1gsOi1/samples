@@ -4,7 +4,7 @@ project(true_conf)
 set(CMAKE_CXX_STANDARD 17)
 
 if (${CMAKE_BUILD_TYPE} STREQUAL Debug)
-  add_compile_options("-Wall" "-Wpedantic" "-Wextra" "-g" "-DDEBUG_")
+  add_compile_options("-DDEBUG_")
 elseif(${CMAKE_BUILD_TYPE} STREQUAL Release)
   add_compile_options("-O3")
 endif()
