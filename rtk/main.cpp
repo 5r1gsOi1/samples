@@ -13,17 +13,23 @@ void terminate(int signal) {
     if (polite_ask < 3) {
       ++polite_ask;
       g_EchoServer.StopPolitely();
+#ifdef DEBUG_
       std::cerr << "asked to stop politely" << std::endl;
+#endif
     } else {
       g_EchoServer.StopImmediately();
+#ifdef DEBUG_
       std::cerr << "terminated server" << std::endl;
+#endif
       exit(0);
     }
   }
 }
 
 int main() {
+#ifdef DEBUG_
   std::cerr << "echo server start" << std::endl;
+#endif
   signal(SIGSEGV, terminate);
   signal(SIGTERM, terminate);
   g_EchoServer.start();

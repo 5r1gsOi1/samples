@@ -40,6 +40,11 @@ void SendToServer() {
   bool success{read_size + 1 == sizeof request and
                0 == strncmp(request, buffer, sizeof request)};
 
+#ifdef DEBUG_
+  std::cerr << "sent = " << sent << ", received = " << read_size << ", "
+            << success << std::endl;
+#endif
+
   if (not success) {
     throw std::runtime_error{"answer from server is different"};
   }
