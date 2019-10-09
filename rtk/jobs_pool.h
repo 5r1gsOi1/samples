@@ -25,7 +25,7 @@ class JobsPool {
     if (not is_finishing_) {
       {
         std::scoped_lock lock{jobs_access_};
-        jobs_.push_back(new_job);
+        jobs_.push_front(new_job);
       }
       wake_up_signal_.notify_one();
     }
@@ -35,7 +35,7 @@ class JobsPool {
     if (not is_finishing_) {
       {
         std::scoped_lock lock{jobs_access_};
-        jobs_.push_back(std::move(new_job));
+        jobs_.push_front(std::move(new_job));
       }
       wake_up_signal_.notify_one();
     }

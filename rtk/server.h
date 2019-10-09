@@ -24,7 +24,8 @@ struct EchoHandler {
   void perform(int thread_number) {
     (void)thread_number;
 #ifdef DEBUG_
-    std::cerr << "INCOMING: port = " << client_address.sin_port;
+    std::cerr << "INCOMING [" << thread_number
+              << "]: port = " << client_address.sin_port;
 #endif
     while (true) {
       ssize_t received{recv(sock, buffer.data(), buffer.size(), MSG_DONTWAIT)};
